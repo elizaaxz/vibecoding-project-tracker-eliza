@@ -164,6 +164,74 @@ The hackathon is "done" when all 13 milestone tags are pushed to your repo and v
 - The "Copy as Prompt Context" demo works on stage.
 - 5 min pitch is rehearsed.
 
+==
+
+## Fuctional Requirements
+
+- Users must be able to create, view, edit and delete tasks
+- each task should contain title, description, type, status assignee, relevant dates eg. Due date
+- users should be able to assign tasks to team members
+- app must display tasks in 4 columns: To do, In Progress, Review and Done
+- users must be able to move tasks between these stages
+- board must update to reflect changes in task status
+- users must be able to save and edit AI prompt context associated with each task
+- users must be able to specify which AI tool was used, such as ChatGPT, Claude or Cursor
+- users must be able to copy task information and saved prompt context into a formatted text block using a "Copy as Prompt Context" button
+- users must be able to assign and reassign tasks using a dropdown menu
+- application must display the assigned team member for each task
+- users must be able to set and update task due dates
+- tasks must be visually highlighted based on their due dates to help identify upcoming or overdue work
+- application must display an Anchor Board containing four project deliverables: Presentation, Demo, Report and Documentation
+- users must be able to add and update links for each deliverable
+- application must automatically save task and deliverable information using browser localStorage
+- previously saved information must be loaded when the application is reopened
+
+## Non-Functional Requirements
+
+- interface should be simple, intuitive and easy to navigate
+- users should be able to create and update tasks without requiring training
+- task status and types should be clear and distinguishable using visual indicators
+- app should load quickly and respond promptly to user interactions
+- creating, editing and moving tasks should update the interface without refreshing the page
+- task information should remain available after refreshing or reopening the application in the same browser, provider localStorage has not been cleared
+- app should use Tailwing CSS to maintain consistency
+- task data should be locally stored in users browser rather than external server
+- app should function on modern desktop browsers such a chrome, edge, firefox
+
+## Data Requirements
+
+- Each task must store:
+
+Task ID: Unique identifier for each task
+Title: Name of the task
+Description: Details about the task
+Type: Feature or Bug
+Status: To Do, In Progress, Review or Done
+Assignee: One of the three team members
+Due Date: Deadline for completing the task, if provided
+Created Date: Date the task was created
+
+- Each task must also support:
+
+Context: Saved AI prompt context or briefing relevant to the task
+Context Tool: AI platform used, such as ChatGPT, Claude or Cursor
+Context Updated At: Timestamp automatically recording when the context was last saved
+
+- Each Anchor Board item must store:
+
+ID: Unique identifier for the deliverable
+Label: Presentation, Demo, Report or Documentation
+URL: Link to the completed deliverable, if available
+
+- All task and deliverable data must be stored using browser localStorage
+- Data must persist between browser sessions unless the user clears their browser storage
+- No external database or backend is required
+- Every task must have a unique ID
+- Task type and status must use the predefined values
+- Task assignees must be selected from the three registered team members
+- Dates must follow the ISO date format (YYYY-MM-DD), with context update timestamps stored in ISO timestamp format
+- Deliverable IDs must correspond to the four predefined Anchor Board categories 
+
 ---
 
 *PRD version: hackathon-starter v1 · maintained by Prof. Dr. Ignacio Alvarez*
