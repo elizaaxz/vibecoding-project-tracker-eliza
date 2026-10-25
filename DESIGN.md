@@ -105,7 +105,9 @@ The tracker probably doesn't need a logo, but it does need a name and a wordmark
 To keep design tight, the following are explicitly not part of `design-done`:
 
 - A dark mode toggle. Pick one mode and ship it.
+  - **Exception (M12 `secret-sauce`):** a Dark theme is offered in the same colour-theme picker (not a separate toggle), using the same tokens; it passes WCAG 2.2 AA contrast.
 - Multiple themes. One brand, applied consistently.
+  - **Exception (M12 `secret-sauce`):** user-selectable colour themes added for accessibility — Default, Red-green safe (protanopia/deuteranopia), Blue-yellow safe (tritanopia), High contrast (low vision) and Dark. All use the same tokens via CSS variables in `src/themes.css`; every theme passes WCAG 2.2 AA contrast (High contrast passes AAA), and meaning is still never shown by colour alone.
 - Animations beyond a 200 ms fade on toast notifications.
 - A custom icon set. Use [Lucide icons](https://lucide.dev) via Tailwind classes if you need any.
 

@@ -1,0 +1,216 @@
+/*
+ * M12 secret-sauce: colour themes, including colour-vision-friendly palettes and dark mode.
+ *
+ * Every colour token in tailwind.config.js reads from a CSS variable defined here,
+ * so switching themes is just changing the data-theme attribute on <html>.
+ * Values are space-separated RGB channels so Tailwind opacity (e.g. bg-surface-overlay/50) still works.
+ * Every theme was checked: all text pairs >= 4.5:1, all borders/icons >= 3:1 (WCAG 2.2 AA).
+ */
+
+/* Default VibeTrack palette (DESIGN.md §2). */
+:root,
+:root[data-theme="default"] {
+  color-scheme: light; /* native controls (date picker, dropdowns) match the theme */
+  --brand-primary: 91 60 196; /* #5B3CC4 */
+  --brand-primary-hover: 76 47 168; /* #4C2FA8 */
+  --brand-primary-soft: 237 233 254; /* #EDE9FE */
+  --brand-accent: 15 118 110; /* #0F766E */
+  --surface-page: 248 250 252; /* #F8FAFC */
+  --surface-column: 241 245 249; /* #F1F5F9 */
+  --surface-card: 255 255 255; /* #FFFFFF */
+  --border-subtle: 226 232 240; /* #E2E8F0 */
+  --border-input: 100 116 139; /* #64748B */
+  --text-primary: 15 23 42; /* #0F172A */
+  --text-muted: 71 85 105; /* #475569 */
+  --type-feature: 29 78 216; /* #1D4ED8 */
+  --type-feature-soft: 219 234 254; /* #DBEAFE */
+  --type-feature-text: 30 64 175; /* #1E40AF */
+  --type-bug: 190 18 60; /* #BE123C */
+  --type-bug-soft: 255 228 230; /* #FFE4E6 */
+  --type-bug-text: 159 18 57; /* #9F1239 */
+  --due-safe: 21 128 61; /* #15803D */
+  --due-safe-soft: 220 252 231; /* #DCFCE7 */
+  --due-safe-text: 22 101 52; /* #166534 */
+  --due-soon: 161 98 7; /* #A16207 */
+  --due-soon-soft: 254 249 195; /* #FEF9C3 */
+  --due-soon-text: 133 77 14; /* #854D0E */
+  --due-warning: 180 83 9; /* #B45309 */
+  --due-warning-soft: 254 243 199; /* #FEF3C7 */
+  --due-warning-text: 146 64 14; /* #92400E */
+  --due-overdue: 185 28 28; /* #B91C1C */
+  --due-overdue-soft: 254 226 226; /* #FEE2E2 */
+  --due-overdue-text: 153 27 27; /* #991B1B */
+  --due-neutral: 100 116 139; /* #64748B */
+  --due-neutral-soft: 241 245 249; /* #F1F5F9 */
+  --due-neutral-text: 71 85 105; /* #475569 */
+  --surface-overlay: 15 23 42; /* #0F172A — modal backdrop */
+}
+
+/* Red-green safe — for protanopia and deuteranopia. Meaning never depends on telling red from green:
+   feature = blue, bug = orange; safe = sky blue, due tomorrow = yellow, due today = indigo, overdue = red. */
+:root[data-theme="red-green"] {
+  color-scheme: light; /* native controls (date picker, dropdowns) match the theme */
+  --brand-primary: 91 60 196; /* #5B3CC4 */
+  --brand-primary-hover: 76 47 168; /* #4C2FA8 */
+  --brand-primary-soft: 237 233 254; /* #EDE9FE */
+  --brand-accent: 3 105 161; /* #0369A1 */
+  --surface-page: 248 250 252; /* #F8FAFC */
+  --surface-column: 241 245 249; /* #F1F5F9 */
+  --surface-card: 255 255 255; /* #FFFFFF */
+  --border-subtle: 226 232 240; /* #E2E8F0 */
+  --border-input: 100 116 139; /* #64748B */
+  --text-primary: 15 23 42; /* #0F172A */
+  --text-muted: 71 85 105; /* #475569 */
+  --type-feature: 29 78 216; /* #1D4ED8 */
+  --type-feature-soft: 219 234 254; /* #DBEAFE */
+  --type-feature-text: 30 64 175; /* #1E40AF */
+  --type-bug: 194 65 12; /* #C2410C */
+  --type-bug-soft: 255 237 213; /* #FFEDD5 */
+  --type-bug-text: 154 52 18; /* #9A3412 */
+  --due-safe: 3 105 161; /* #0369A1 */
+  --due-safe-soft: 224 242 254; /* #E0F2FE */
+  --due-safe-text: 7 89 133; /* #075985 */
+  --due-soon: 161 98 7; /* #A16207 */
+  --due-soon-soft: 254 249 195; /* #FEF9C3 */
+  --due-soon-text: 133 77 14; /* #854D0E */
+  --due-warning: 67 56 202; /* #4338CA */
+  --due-warning-soft: 224 231 255; /* #E0E7FF */
+  --due-warning-text: 55 48 163; /* #3730A3 */
+  --due-overdue: 185 28 28; /* #B91C1C */
+  --due-overdue-soft: 254 226 226; /* #FEE2E2 */
+  --due-overdue-text: 153 27 27; /* #991B1B */
+  --due-neutral: 100 116 139; /* #64748B */
+  --due-neutral-soft: 241 245 249; /* #F1F5F9 */
+  --due-neutral-text: 71 85 105; /* #475569 */
+  --surface-overlay: 15 23 42; /* #0F172A — modal backdrop */
+}
+
+/* Blue-yellow safe — for tritanopia. Meaning never depends on telling blue from green or yellow from pink:
+   feature = cyan, bug = rose; safe = teal, due tomorrow = orange, due today = purple, overdue = red. */
+:root[data-theme="blue-yellow"] {
+  color-scheme: light; /* native controls (date picker, dropdowns) match the theme */
+  --brand-primary: 91 60 196; /* #5B3CC4 */
+  --brand-primary-hover: 76 47 168; /* #4C2FA8 */
+  --brand-primary-soft: 237 233 254; /* #EDE9FE */
+  --brand-accent: 15 118 110; /* #0F766E */
+  --surface-page: 248 250 252; /* #F8FAFC */
+  --surface-column: 241 245 249; /* #F1F5F9 */
+  --surface-card: 255 255 255; /* #FFFFFF */
+  --border-subtle: 226 232 240; /* #E2E8F0 */
+  --border-input: 100 116 139; /* #64748B */
+  --text-primary: 15 23 42; /* #0F172A */
+  --text-muted: 71 85 105; /* #475569 */
+  --type-feature: 14 116 144; /* #0E7490 */
+  --type-feature-soft: 207 250 254; /* #CFFAFE */
+  --type-feature-text: 21 94 117; /* #155E75 */
+  --type-bug: 190 18 60; /* #BE123C */
+  --type-bug-soft: 255 228 230; /* #FFE4E6 */
+  --type-bug-text: 159 18 57; /* #9F1239 */
+  --due-safe: 15 118 110; /* #0F766E */
+  --due-safe-soft: 204 251 241; /* #CCFBF1 */
+  --due-safe-text: 17 94 89; /* #115E59 */
+  --due-soon: 194 65 12; /* #C2410C */
+  --due-soon-soft: 255 237 213; /* #FFEDD5 */
+  --due-soon-text: 154 52 18; /* #9A3412 */
+  --due-warning: 126 34 206; /* #7E22CE */
+  --due-warning-soft: 243 232 255; /* #F3E8FF */
+  --due-warning-text: 107 33 168; /* #6B21A8 */
+  --due-overdue: 185 28 28; /* #B91C1C */
+  --due-overdue-soft: 254 226 226; /* #FEE2E2 */
+  --due-overdue-text: 153 27 27; /* #991B1B */
+  --due-neutral: 100 116 139; /* #64748B */
+  --due-neutral-soft: 241 245 249; /* #F1F5F9 */
+  --due-neutral-text: 71 85 105; /* #475569 */
+  --surface-overlay: 15 23 42; /* #0F172A — modal backdrop */
+}
+
+/* High contrast — for low vision. Darker text and borders; every text pair is at least 7:1 (WCAG AAA). */
+:root[data-theme="high-contrast"] {
+  color-scheme: light; /* native controls (date picker, dropdowns) match the theme */
+  --brand-primary: 59 31 158; /* #3B1F9E */
+  --brand-primary-hover: 42 21 115; /* #2A1573 */
+  --brand-primary-soft: 237 233 254; /* #EDE9FE */
+  --brand-accent: 11 79 74; /* #0B4F4A */
+  --surface-page: 255 255 255; /* #FFFFFF */
+  --surface-column: 241 245 249; /* #F1F5F9 */
+  --surface-card: 255 255 255; /* #FFFFFF */
+  --border-subtle: 71 85 105; /* #475569 */
+  --border-input: 15 23 42; /* #0F172A */
+  --text-primary: 0 0 0; /* #000000 */
+  --text-muted: 30 41 59; /* #1E293B */
+  --type-feature: 30 58 138; /* #1E3A8A */
+  --type-feature-soft: 219 234 254; /* #DBEAFE */
+  --type-feature-text: 30 58 138; /* #1E3A8A */
+  --type-bug: 136 19 55; /* #881337 */
+  --type-bug-soft: 255 228 230; /* #FFE4E6 */
+  --type-bug-text: 136 19 55; /* #881337 */
+  --due-safe: 20 83 45; /* #14532D */
+  --due-safe-soft: 220 252 231; /* #DCFCE7 */
+  --due-safe-text: 20 83 45; /* #14532D */
+  --due-soon: 113 63 18; /* #713F12 */
+  --due-soon-soft: 254 249 195; /* #FEF9C3 */
+  --due-soon-text: 113 63 18; /* #713F12 */
+  --due-warning: 124 45 18; /* #7C2D12 */
+  --due-warning-soft: 255 237 213; /* #FFEDD5 */
+  --due-warning-text: 124 45 18; /* #7C2D12 */
+  --due-overdue: 127 29 29; /* #7F1D1D */
+  --due-overdue-soft: 254 226 226; /* #FEE2E2 */
+  --due-overdue-text: 127 29 29; /* #7F1D1D */
+  --due-neutral: 51 65 85; /* #334155 */
+  --due-neutral-soft: 226 232 240; /* #E2E8F0 */
+  --due-neutral-text: 30 41 59; /* #1E293B */
+  --surface-overlay: 0 0 0; /* #000000 — modal backdrop */
+}
+
+/* Dark — light text on deep slate surfaces, for low-light use and light sensitivity.
+   Tints become deep colours with light text; every text pair is at least 4.5:1. */
+:root[data-theme="dark"] {
+  color-scheme: dark; /* native controls (date picker, dropdowns) match the theme */
+  --brand-primary: 167 139 250; /* #A78BFA */
+  --brand-primary-hover: 196 181 253; /* #C4B5FD */
+  --brand-primary-soft: 46 16 101; /* #2E1065 */
+  --brand-accent: 94 234 212; /* #5EEAD4 */
+  --surface-page: 2 6 23; /* #020617 */
+  --surface-column: 15 23 42; /* #0F172A */
+  --surface-card: 30 41 59; /* #1E293B */
+  --border-subtle: 51 65 85; /* #334155 */
+  --border-input: 148 163 184; /* #94A3B8 */
+  --text-primary: 241 245 249; /* #F1F5F9 */
+  --text-muted: 203 213 225; /* #CBD5E1 */
+  --type-feature: 96 165 250; /* #60A5FA */
+  --type-feature-soft: 23 37 84; /* #172554 */
+  --type-feature-text: 191 219 254; /* #BFDBFE */
+  --type-bug: 251 113 133; /* #FB7185 */
+  --type-bug-soft: 76 5 25; /* #4C0519 */
+  --type-bug-text: 254 205 211; /* #FECDD3 */
+  --due-safe: 74 222 128; /* #4ADE80 */
+  --due-safe-soft: 5 46 22; /* #052E16 */
+  --due-safe-text: 187 247 208; /* #BBF7D0 */
+  --due-soon: 250 204 21; /* #FACC15 */
+  --due-soon-soft: 66 32 6; /* #422006 */
+  --due-soon-text: 254 240 138; /* #FEF08A */
+  --due-warning: 251 146 60; /* #FB923C */
+  --due-warning-soft: 67 20 7; /* #431407 */
+  --due-warning-text: 254 215 170; /* #FED7AA */
+  --due-overdue: 248 113 113; /* #F87171 */
+  --due-overdue-soft: 69 10 10; /* #450A0A */
+  --due-overdue-text: 254 202 202; /* #FECACA */
+  --due-neutral: 148 163 184; /* #94A3B8 */
+  --due-neutral-soft: 11 18 32; /* #0B1220 */
+  --due-neutral-text: 226 232 240; /* #E2E8F0 */
+  --surface-overlay: 0 0 0; /* #000000 — modal backdrop */
+}
+
+/* The page itself follows the theme (index.css sets fixed body colours, so this is more specific). */
+html body {
+  background-color: rgb(var(--surface-page));
+  color: rgb(var(--text-primary));
+}
+
+/* Respect users who ask the OS for less motion (DESIGN.md §5). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

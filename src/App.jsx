@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+// M12 secret-sauce: colour themes (CSS variables read by tailwind.config.js)
+import './themes.css';
 
 /**
  * Vibecoding Project Tracker — starter scaffold.
@@ -17,6 +19,10 @@ import { useState, useEffect, useRef } from 'react';
  *   - M10 copy-prompt   : a "Copy as Prompt Context" button that serializes the task + context.
  *   - M11 anchors       : the Anchor Board above the Kanban.
  *   - M12 secret-sauce  : the one open-ended thing that makes your tracker yours.
+ *                         VibeTrack: user-selectable colour themes, including
+ *                         colour-vision-friendly palettes and dark mode (see src/themes.css),
+ *                         plus adjustable text size and a Focus mode for cognitive
+ *                         accessibility (e.g. ADHD), all in a Settings dialog.
  *
  * Search the file for `TODO M<n>` to find the right hook for each milestone.
  */
@@ -32,7 +38,12 @@ import { useState, useEffect, useRef } from 'react';
  * @property {string|null} dueDate     ISO 'YYYY-MM-DD'
  * @property {string} createdDate      ISO 'YYYY-MM-DD'
  * @property {string} [context]        M9: curated, paste-ready briefing for an AI tool
+ * @property {string|null} [contextTool]       M9: AI tool used, one of AI_TOOLS (PRD §5)
+ * @property {string|null} [contextUpdatedAt]  M9: ISO timestamp, set automatically when context is saved
  */
+
+// M9 context: the AI tools a task's context can come from (PRD §5 data model).
+export const AI_TOOLS = ['Claude', 'ChatGPT', 'Cursor', 'Lovable', 'Replit', 'Other'];
 
 // The four columns of the board, in render order.
 // Use these IDs everywhere — do not invent new ones.
@@ -160,6 +171,68 @@ function blankTask() {
     dueDate: null,
     createdDate: todayISO(),
     context: '',
+    contextTool: null,
+    contextUpdatedAt: null,
+  };
+}
+
+// Data requirements: shows an ISO timestamp as e.g. "25 Oct 2026, 22:14".
+function formatTimestamp(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// Data requirements: true for a real ISO date like '2026-10-25'.
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
+/**
+ * Data requirements: keeps saved tasks inside the PRD rules when they are loaded
+ * (e.g. after team names change or older data is missing newer fields):
+ * unique IDs, predefined type/status, assignee from TEAM, ISO dates, valid AI tool.
+ */
+function normaliseTasks(list) {
+  if (!Array.isArray(list)) return SEED_TASKS.map((t) => normaliseTask(t));
+  const seen = new Set();
+  return list
+    .filter((t) => t && typeof t === 'object')
+    .map((t) => {
+      const task = normaliseTask(t);
+      if (!task.id || seen.has(task.id)) task.id = newId();
+      seen.add(task.id);
+      return task;
+    });
+}
+
+function normaliseTask(t) {
+  return {
+    ...t,
+    id: typeof t.id === 'string' ? t.id : '',
+    title: typeof t.title === 'string' && t.title.trim() ? t.title : 'Untitled task',
+    description: typeof t.description === 'string' ? t.description : '',
+    type: t.type === 'bug' ? 'bug' : 'feature',
+    status: STAGES.some((s) => s.id === t.status) ? t.status : 'todo',
+    assignee: TEAM.includes(t.assignee) ? t.assignee : TEAM[0],
+    dueDate: isIsoDate(t.dueDate) ? t.dueDate : null,
+    createdDate: isIsoDate(t.createdDate) ? t.createdDate : todayISO(),
+    context: typeof t.context === 'string' ? t.context : '',
+    contextTool: AI_TOOLS.includes(t.contextTool) ? t.contextTool : null,
+    contextUpdatedAt:
+      typeof t.contextUpdatedAt === 'string' && !Number.isNaN(new Date(t.contextUpdatedAt).getTime())
+        ? t.contextUpdatedAt
+        : null,
   };
 }
 
@@ -202,6 +275,10 @@ function buildPrompt(task) {
     '## Context',
     task.context && task.context.trim() ? task.context.trim() : 'No prompt context added yet.',
   ];
+  // M9 context: say which AI tool the context came from and when it was last updated
+  if (task.contextTool || task.contextUpdatedAt) lines.push('');
+  if (task.contextTool) lines.push(`AI tool used: ${task.contextTool}`);
+  if (task.contextUpdatedAt) lines.push(`Context last updated: ${formatTimestamp(task.contextUpdatedAt)}`);
   return lines.join('\n');
 }
 
@@ -266,7 +343,7 @@ const COPY_BUTTON_CLASS =
  */
 function TaskModal({ task, isNew, onSave, onDelete, onClose, onCopy }) {
   // M9 context: older saved tasks may not have a context field yet
-  const [form, setForm] = useState({ context: '', ...task });
+  const [form, setForm] = useState({ context: '', contextTool: null, contextUpdatedAt: null, ...task });
   const [error, setError] = useState('');
   const dialogRef = useRef(null);
   const titleInputRef = useRef(null);
@@ -311,11 +388,22 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose, onCopy }) {
       titleInputRef.current?.focus();
       return;
     }
+    const context = form.context.trim();
+    const contextTool = form.contextTool || null;
+    // M9 context: record when the context (or its AI tool) last changed, as an ISO timestamp
+    const contextChanged =
+      context !== (task.context || '').trim() || contextTool !== (task.contextTool || null);
     onSave({
       ...form,
       title: form.title.trim(),
       dueDate: form.dueDate || null,
-      context: form.context.trim(),
+      context,
+      contextTool,
+      contextUpdatedAt: contextChanged
+        ? context || contextTool
+          ? new Date().toISOString()
+          : null
+        : form.contextUpdatedAt || null,
     });
   }
 
@@ -331,7 +419,7 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose, onCopy }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-overlay/60 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -480,6 +568,33 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose, onCopy }) {
               spellCheck={false}
               className={`${fieldClass} font-mono text-sm leading-relaxed`}
             />
+            {/* M9 context: which AI tool produced this context (PRD §5 contextTool) */}
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-[12rem] flex-1">
+                <label htmlFor="task-context-tool" className={labelClass}>
+                  AI tool used
+                </label>
+                <select
+                  id="task-context-tool"
+                  value={form.contextTool || ''}
+                  onChange={(e) => update('contextTool', e.target.value || null)}
+                  className={fieldClass}
+                >
+                  <option value="">Not specified</option>
+                  {AI_TOOLS.map((tool) => (
+                    <option key={tool} value={tool}>
+                      {tool}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* M9 context: PRD §5 contextUpdatedAt, set automatically on save */}
+              <p className="pb-2 text-sm text-text-muted">
+                {form.contextUpdatedAt
+                  ? `Context last updated ${formatTimestamp(form.contextUpdatedAt)}`
+                  : 'Context not saved yet'}
+              </p>
+            </div>
             {/* M10 copy-prompt: copies what is in the form right now, saved or not */}
             <button
               type="button"
@@ -717,11 +832,25 @@ function DueIcon({ state }) {
 
 // M11 anchors: the four project deliverables pinned above the board.
 const DEFAULT_ANCHORS = [
-  { id: 'presentation', label: 'Presentation', hint: 'Slides for the pitch', url: '', status: 'not-started' },
-  { id: 'demo', label: 'Demo', hint: 'Live prototype link', url: '', status: 'not-started' },
-  { id: 'report', label: 'Report', hint: 'Written report', url: '', status: 'not-started' },
-  { id: 'documentation', label: 'Documentation', hint: 'README, PRD and DESIGN.md', url: '', status: 'not-started' },
+  { id: 'presentation', label: 'Presentation', hint: 'Slides for the pitch', url: null, status: 'not-started' },
+  { id: 'demo', label: 'Demo', hint: 'Live prototype link', url: null, status: 'not-started' },
+  { id: 'report', label: 'Report', hint: 'Written report', url: null, status: 'not-started' },
+  { id: 'documentation', label: 'Documentation', hint: 'README, PRD and DESIGN.md', url: null, status: 'not-started' },
 ];
+
+// Data requirements: always exactly the four predefined deliverables, in order,
+// keeping any saved link and status (an empty link is stored as null, per PRD §5).
+function normaliseAnchors(list) {
+  const saved = Array.isArray(list) ? list : [];
+  return DEFAULT_ANCHORS.map((def) => {
+    const match = saved.find((a) => a && a.id === def.id) || {};
+    return {
+      ...def,
+      url: typeof match.url === 'string' && match.url.trim() ? match.url : null,
+      status: ANCHOR_STATUSES.some((s) => s.id === match.status) ? match.status : def.status,
+    };
+  });
+}
 
 // M11 anchors: progress states, each shown with words and colour (never colour alone).
 const ANCHOR_STATUSES = [
@@ -746,7 +875,7 @@ function normaliseUrl(raw) {
 // M11 anchors: one deliverable card with an inline link editor.
 function AnchorCard({ anchor, onChange }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(anchor.url);
+  const [draft, setDraft] = useState(anchor.url || '');
   const [error, setError] = useState('');
   const inputRef = useRef(null);
   const editButtonRef = useRef(null);
@@ -759,7 +888,7 @@ function AnchorCard({ anchor, onChange }) {
   }, [isEditing]);
 
   function startEditing() {
-    setDraft(anchor.url);
+    setDraft(anchor.url || '');
     setError('');
     setIsEditing(true);
   }
@@ -774,7 +903,7 @@ function AnchorCard({ anchor, onChange }) {
   function save(event) {
     event.preventDefault();
     if (!draft.trim()) {
-      onChange({ ...anchor, url: '' });
+      onChange({ ...anchor, url: null });
       stopEditing();
       return;
     }
@@ -892,7 +1021,7 @@ function AnchorCard({ anchor, onChange }) {
 }
 
 // M11 anchors: the Deliverable Anchor Board (collapsible, pinned above the Kanban).
-function AnchorBoard({ anchors, onChange }) {
+function AnchorBoard({ anchors, onChange, gridColumns }) {
   const [open, setOpen] = useState(true);
   const doneCount = anchors.filter((a) => a.status === 'done').length;
 
@@ -919,7 +1048,7 @@ function AnchorBoard({ anchors, onChange }) {
         </button>
       </div>
       {open && (
-        <ul id="anchor-board-list" className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ul id="anchor-board-list" className={`mt-3 grid grid-cols-1 gap-3 ${gridColumns}`}>
           {anchors.map((anchor) => (
             <AnchorCard
               key={anchor.id}
@@ -935,11 +1064,378 @@ function AnchorBoard({ anchors, onChange }) {
   );
 }
 
+// M12 secret-sauce: the themes defined in src/themes.css.
+const THEMES = [
+  {
+    id: 'default',
+    label: 'Default',
+    description: 'The standard VibeTrack colours.',
+  },
+  {
+    id: 'red-green',
+    label: 'Red-green safe',
+    description:
+      'For protanopia and deuteranopia. Bugs are orange instead of red, and safe deadlines are blue instead of green.',
+  },
+  {
+    id: 'blue-yellow',
+    label: 'Blue-yellow safe',
+    description:
+      'For tritanopia. Features are cyan, and deadline colours avoid blue-green and yellow-pink pairs.',
+  },
+  {
+    id: 'high-contrast',
+    label: 'High contrast',
+    description: 'For low vision. Darker text and stronger borders, with at least 7:1 contrast.',
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    description: 'Light text on dark backgrounds, for low light or light sensitivity.',
+  },
+];
+
+// M12 secret-sauce: text sizes. They scale the root font size, and because every
+// size and space in Tailwind is in rem, the whole interface grows with it
+// (WCAG 1.4.4 Resize Text). Percentages respect the user's own browser setting.
+const TEXT_SIZES = [
+  { id: 'default', label: 'Default', percent: 100 },
+  { id: 'large', label: 'Large', percent: 115 },
+  { id: 'x-large', label: 'Extra large', percent: 130 },
+  { id: 'largest', label: 'Largest', percent: 150 },
+];
+
+// M12 secret-sauce: at bigger text sizes, show fewer columns so nothing gets squashed.
+// Full class names are written out so Tailwind keeps them in the build.
+const GRID_COLUMNS = {
+  default: 'sm:grid-cols-2 lg:grid-cols-4',
+  large: 'sm:grid-cols-2 lg:grid-cols-4',
+  'x-large': 'md:grid-cols-2 xl:grid-cols-4',
+  largest: 'lg:grid-cols-2 2xl:grid-cols-4',
+};
+
+// M12 secret-sauce: Lucide "settings" icon.
+function SettingsIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+// M12 secret-sauce: one radio option card (used for text size and colour theme).
+function OptionCard({ name, value, checked, onChange, title, description, titleStyle }) {
+  const id = `${name}-${value}`;
+  return (
+    <label
+      htmlFor={id}
+      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 ${
+        checked
+          ? 'border-brand-primary bg-brand-primary-soft'
+          : 'border-border-input bg-surface-card hover:bg-surface-column'
+      }`}
+    >
+      <input
+        id={id}
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={() => onChange(value)}
+        aria-describedby={description ? `${id}-desc` : undefined}
+        className="mt-1 h-4 w-4 shrink-0 accent-brand-primary focus:outline-none"
+      />
+      <span className="min-w-0">
+        <span className="block font-medium text-text-primary" style={titleStyle}>
+          {title}
+        </span>
+        {description && (
+          <span id={`${id}-desc`} className="block text-sm text-text-muted">
+            {description}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
+// M12 secret-sauce: an on/off setting, built on a native checkbox with role="switch".
+function ToggleRow({ id, checked, onChange, title, description }) {
+  return (
+    <label
+      htmlFor={id}
+      className={`flex cursor-pointer items-start justify-between gap-4 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 ${
+        checked
+          ? 'border-brand-primary bg-brand-primary-soft'
+          : 'border-border-input bg-surface-card hover:bg-surface-column'
+      }`}
+    >
+      <span className="min-w-0">
+        <span className="block font-medium text-text-primary">{title}</span>
+        <span id={`${id}-desc`} className="block text-sm text-text-muted">
+          {description}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="text-sm font-medium text-text-primary" aria-hidden="true">
+          {checked ? 'On' : 'Off'}
+        </span>
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-describedby={`${id}-desc`}
+          className="h-5 w-5 accent-brand-primary focus:outline-none"
+        />
+      </span>
+    </label>
+  );
+}
+
+// M12 secret-sauce: Focus mode stage tabs (WAI-ARIA tabs pattern, arrow-key navigation).
+function FocusStageTabs({ tasks, stage, onChange }) {
+  const tabRefs = useRef({});
+
+  function handleKeyDown(event) {
+    const index = STAGES.findIndex((s) => s.id === stage);
+    let next = null;
+    if (event.key === 'ArrowRight') next = (index + 1) % STAGES.length;
+    if (event.key === 'ArrowLeft') next = (index - 1 + STAGES.length) % STAGES.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = STAGES.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    const id = STAGES[next].id;
+    onChange(id);
+    tabRefs.current[id]?.focus();
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Choose a stage to focus on"
+      onKeyDown={handleKeyDown}
+      className="mx-auto mb-4 flex max-w-2xl flex-wrap gap-2"
+    >
+      {STAGES.map((s) => {
+        const selected = s.id === stage;
+        const count = tasks.filter((t) => t.status === s.id).length;
+        return (
+          <button
+            key={s.id}
+            ref={(el) => {
+              tabRefs.current[s.id] = el;
+            }}
+            type="button"
+            role="tab"
+            id={`focus-tab-${s.id}`}
+            aria-selected={selected}
+            aria-controls="focus-panel"
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(s.id)}
+            className={`rounded-full border px-4 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 ${
+              selected
+                ? 'border-brand-primary bg-brand-primary text-surface-card'
+                : 'border-border-input bg-surface-card text-text-primary hover:bg-surface-column'
+            }`}
+          >
+            {s.label} <span aria-hidden="true">({count})</span>
+            <span className="sr-only">, {count} {count === 1 ? 'task' : 'tasks'}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * M12 secret-sauce: the Settings dialog (text size + colour theme + focus).
+ * Same accessible pattern as the task modal: role="dialog", focus moves in,
+ * Tab stays inside, Escape closes, focus returns to the Settings button.
+ * Changes apply straight away so users can see the effect before closing.
+ */
+function SettingsModal({
+  theme,
+  onThemeChange,
+  textSize,
+  onTextSizeChange,
+  focusMode,
+  onFocusModeChange,
+  hideDetails,
+  onHideDetailsChange,
+  onReset,
+  onClose,
+}) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    closeRef.current?.focus();
+    return () => {
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+    };
+  }, []);
+
+  function handleKeyDown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((el) => !(el.type === 'radio' && !el.checked));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-overlay/60 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        aria-describedby="settings-help"
+        onKeyDown={handleKeyDown}
+        className="max-h-full w-full max-w-xl overflow-y-auto rounded-xl bg-surface-card p-6 shadow-xl"
+      >
+        <div className="mb-1 flex items-start justify-between gap-4">
+          <h2 id="settings-title" className="text-lg font-semibold text-text-primary">
+            Settings
+          </h2>
+          <button
+            type="button"
+            ref={closeRef}
+            onClick={onClose}
+            aria-label="Close settings"
+            className="rounded-md px-2 py-1 text-lg leading-none text-text-muted hover:bg-surface-column focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <p id="settings-help" className="mb-5 text-sm text-text-muted">
+          Changes apply straight away and are saved on this device.
+        </p>
+
+        {/* M12 secret-sauce: cognitive accessibility options (optional for anyone) */}
+        <fieldset className="mb-6">
+          <legend className="mb-1 text-base font-semibold text-text-primary">Focus</legend>
+          <p className="mb-2 text-sm text-text-muted">
+            Optional ways to reduce visual clutter, for example if a busy board is distracting.
+            Every feature stays available.
+          </p>
+          <div className="flex flex-col gap-2">
+            <ToggleRow
+              id="setting-focus-mode"
+              checked={focusMode}
+              onChange={onFocusModeChange}
+              title="Focus mode"
+              description="Show one stage at a time instead of all four columns. Switch stages with the tabs above the board."
+            />
+            <ToggleRow
+              id="setting-hide-details"
+              checked={hideDetails}
+              onChange={onHideDetailsChange}
+              title="Hide extra card details"
+              description="Cards show only the type, title, owner and due date. Open a task to see everything else, including hand-off and copy."
+            />
+          </div>
+        </fieldset>
+
+        <fieldset className="mb-6">
+          <legend className="mb-2 text-base font-semibold text-text-primary">Text size</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {TEXT_SIZES.map((size) => (
+              <OptionCard
+                key={size.id}
+                name="text-size"
+                value={size.id}
+                checked={textSize === size.id}
+                onChange={onTextSizeChange}
+                title={size.label}
+                description={`${size.percent}% of your browser's text size`}
+                titleStyle={{ fontSize: `${size.percent / 100}em` }}
+              />
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="mb-6">
+          <legend className="mb-2 text-base font-semibold text-text-primary">Colour theme</legend>
+          <div className="flex flex-col gap-2">
+            {THEMES.map((t) => (
+              <OptionCard
+                key={t.id}
+                name="colour-theme"
+                value={t.id}
+                checked={theme === t.id}
+                onChange={onThemeChange}
+                title={t.label}
+                description={t.description}
+              />
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded-md border border-border-input bg-surface-card px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-column focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            Reset to defaults
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // TODO M4 data-model:
   //   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', [/* 3-4 seed tasks */]);
   //
   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', SEED_TASKS);
+  // Data requirements: once on load, bring saved tasks in line with the PRD rules
+  useEffect(() => {
+    setTasks((prev) => normaliseTasks(prev));
+  }, [setTasks]);
   //
   // TODO M5 crud-modal:
   //   const [editing, setEditing] = useState(null);
@@ -988,10 +1484,49 @@ export default function App() {
   // TODO M11 anchors:
   //   const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', [...]);
   const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', DEFAULT_ANCHORS);
+  // Data requirements: once on load, keep exactly the four predefined deliverables
+  useEffect(() => {
+    setAnchors((prev) => normaliseAnchors(prev));
+  }, [setAnchors]);
 
+  // M12 secret-sauce: the chosen colour theme, saved between visits.
+  const [theme, setTheme] = useLocalStorage('vibetracker.theme', 'default');
+  useEffect(() => {
+    const valid = THEMES.some((t) => t.id === theme) ? theme : 'default';
+    document.documentElement.setAttribute('data-theme', valid);
+  }, [theme]);
+
+  // M12 secret-sauce: the chosen text size, saved between visits.
+  const [textSize, setTextSize] = useLocalStorage('vibetracker.textSize', 'default');
+  const currentSize = TEXT_SIZES.find((t) => t.id === textSize) || TEXT_SIZES[0];
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${currentSize.percent}%`;
+  }, [currentSize.percent]);
+  const gridColumns = GRID_COLUMNS[currentSize.id];
+
+  // M12 secret-sauce: the Settings dialog.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // M12 secret-sauce: Focus mode and simplified cards, saved between visits.
+  const [focusMode, setFocusMode] = useLocalStorage('vibetracker.focusMode', false);
+  const [focusStage, setFocusStage] = useLocalStorage('vibetracker.focusStage', 'todo');
+  const [hideDetails, setHideDetails] = useLocalStorage('vibetracker.hideDetails', false);
+  const currentFocusStage = STAGES.some((s) => s.id === focusStage) ? focusStage : STAGES[0].id;
+  const visibleStages = focusMode ? STAGES.filter((s) => s.id === currentFocusStage) : STAGES;
+
+  function resetSettings() {
+    setTheme('default');
+    setTextSize('default');
+    setFocusMode(false);
+    setHideDetails(false);
+    setToast('Settings reset to defaults.');
+  }
+
+  // M12 secret-sauce: the page background and text follow the selected theme
+  // (index.css hard-codes the body colours, so they are set here instead).
   return (
-    <div className="min-h-screen p-6">
-      <header className="mb-6 flex items-end justify-between">
+    <div className="min-h-screen bg-surface-page p-6 text-text-primary">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
             Vibecoding Project Tracker
@@ -1001,18 +1536,30 @@ export default function App() {
             VibeTrack · From prompt to progress
           </p>
         </div>
-        {/* M5 crud-modal: "+" button */}
-        <button
-          type="button"
-          onClick={() => setEditing(blankTask())}
-          className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
-        >
-          <span aria-hidden="true">+ </span>Add task
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* M12 secret-sauce: Settings (text size + colour theme) */}
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-haspopup="dialog"
+            className="inline-flex items-center gap-2 rounded-md border border-border-input bg-surface-card px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-column focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            <SettingsIcon />
+            Settings
+          </button>
+          {/* M5 crud-modal: "+" button */}
+          <button
+            type="button"
+            onClick={() => setEditing(blankTask())}
+            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            <span aria-hidden="true">+ </span>Add task
+          </button>
+        </div>
       </header>
 
       {/* TODO M11 anchors: render the Anchor Board (Presentation / Demo / Report / Documentation) above the board. */}
-      <AnchorBoard anchors={anchors} onChange={setAnchors} />
+      <AnchorBoard anchors={anchors} onChange={setAnchors} gridColumns={gridColumns} />
 
       {/*
         TODO M4 data-model:
@@ -1024,11 +1571,18 @@ export default function App() {
           Add a "+" button that opens a modal with every Task field.
           Clicking a card should open the same modal in edit mode.
       */}
-      <main
-        aria-label="Task board"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        {STAGES.map((stage) => {
+      <main aria-label="Task board">
+        {/* M12 secret-sauce: in Focus mode, tabs pick the one stage that is shown */}
+        {focusMode && (
+          <FocusStageTabs tasks={tasks} stage={currentFocusStage} onChange={setFocusStage} />
+        )}
+        <div
+          {...(focusMode
+            ? { id: 'focus-panel', role: 'tabpanel', 'aria-labelledby': `focus-tab-${currentFocusStage}` }
+            : {})}
+          className={focusMode ? 'mx-auto max-w-2xl' : `grid grid-cols-1 gap-4 ${gridColumns}`}
+        >
+        {visibleStages.map((stage) => {
           const stageTasks = tasks.filter((task) => task.status === stage.id);
           const headingId = `column-${stage.id}`;
 
@@ -1085,13 +1639,14 @@ export default function App() {
                             {task.title}
                           </button>
                         </h3>
-                        {task.description && (
+                        {/* M12 secret-sauce: "Hide extra card details" hides the description and context note */}
+                        {!hideDetails && task.description && (
                           <p className="mt-1 break-words text-sm text-text-muted">
                             {task.description}
                           </p>
                         )}
                         {/* M9 context: shows which tasks already have a briefing */}
-                        {task.context && task.context.trim() && (
+                        {!hideDetails && task.context && task.context.trim() && (
                           <p className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-primary">
                             <svg
                               width="14"
@@ -1112,6 +1667,7 @@ export default function App() {
                               <path d="M16 17H8" />
                             </svg>
                             Prompt context added
+                            {task.contextTool && <span className="font-normal">· {task.contextTool}</span>}
                           </p>
                         )}
                         <dl className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-muted">
@@ -1135,6 +1691,9 @@ export default function App() {
                           </div>
                         </dl>
 
+                        {/* M12 secret-sauce: hand-off and copy stay available in the task modal when hidden here */}
+                        {!hideDetails && (
+                        <>
                         {/* M7 task-owner: "Hand off to..." dropdown (sits above the card's click area) */}
                         <div className="relative z-10 mt-3 flex items-center gap-2 border-t border-border-subtle pt-3">
                           <label
@@ -1167,6 +1726,8 @@ export default function App() {
                           <CopyIcon />
                           Copy as Prompt Context
                         </button>
+                        </>
+                        )}
                       </article>
                     </li>
                     );
@@ -1176,6 +1737,7 @@ export default function App() {
             </section>
           );
         })}
+        </div>
       </main>
 
       {editing && (
@@ -1187,6 +1749,22 @@ export default function App() {
           onDelete={deleteTask}
           onClose={() => setEditing(null)}
           onCopy={copyPrompt}
+        />
+      )}
+
+      {/* M12 secret-sauce: Settings dialog */}
+      {settingsOpen && (
+        <SettingsModal
+          theme={theme}
+          onThemeChange={setTheme}
+          textSize={currentSize.id}
+          onTextSizeChange={setTextSize}
+          focusMode={focusMode}
+          onFocusModeChange={setFocusMode}
+          hideDetails={hideDetails}
+          onHideDetailsChange={setHideDetails}
+          onReset={resetSettings}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 
