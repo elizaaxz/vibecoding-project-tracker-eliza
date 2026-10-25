@@ -227,7 +227,7 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/50 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -370,7 +370,7 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+                className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
               >
                 {isNew ? 'Add task' : 'Save changes'}
               </button>
@@ -439,11 +439,11 @@ const TYPE_STYLES = {
   },
 };
 
-// M7 task-owner: one avatar colour per team member (all pass WCAG AA contrast).
+// M7 task-owner: one avatar colour per team member, all from tailwind.config.js (all pass WCAG AA contrast).
 const OWNER_STYLES = [
   'bg-brand-primary-soft text-brand-primary',
-  'bg-[#CCFBF1] text-[#115E59]',
-  'bg-slate-200 text-slate-700',
+  'border border-brand-accent bg-surface-card text-brand-accent',
+  'bg-surface-column text-text-muted',
 ];
 
 // M7 task-owner: initials for the avatar, e.g. "Full-Stack Developer" -> "FD".
@@ -468,6 +468,107 @@ function OwnerBadge({ name }) {
       </span>
       <span className="truncate text-sm text-text-primary">{name}</span>
     </span>
+  );
+}
+
+// M8 due-tint: whole days from today to the due date (negative = overdue).
+function daysUntil(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const due = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((due - today) / 86400000);
+}
+
+/**
+ * M8 due-tint: works out which DESIGN.md §2 due state a task is in.
+ *   done          -> neutral  (overrides the date)
+ *   past due      -> overdue
+ *   due today     -> warning  (less than 24 hours)
+ *   due tomorrow  -> soon     (24–48 hours)
+ *   2+ days away  -> safe
+ */
+function dueState(task) {
+  if (task.status === 'done') return { key: 'neutral', label: 'Done' };
+  if (!task.dueDate) return { key: 'none', label: 'No due date' };
+  const days = daysUntil(task.dueDate);
+  if (days < 0) {
+    const n = Math.abs(days);
+    return { key: 'overdue', label: `Overdue by ${n} day${n === 1 ? '' : 's'}` };
+  }
+  if (days === 0) return { key: 'warning', label: 'Due today' };
+  if (days === 1) return { key: 'soon', label: 'Due tomorrow' };
+  return { key: 'safe', label: `Due ${formatDate(task.dueDate)}` };
+}
+
+// M8 due-tint: full class names so Tailwind keeps them. Card tint + badge per state.
+const DUE_STYLES = {
+  safe: { card: 'bg-surface-card', badge: 'border-due-safe text-due-safe-text' },
+  soon: { card: 'bg-due-soon-soft', badge: 'border-due-soon text-due-soon-text' },
+  warning: { card: 'bg-due-warning-soft', badge: 'border-due-warning text-due-warning-text' },
+  overdue: { card: 'bg-due-overdue-soft', badge: 'border-due-overdue text-due-overdue-text' },
+  neutral: { card: 'bg-due-neutral-soft', badge: 'border-due-neutral text-due-neutral-text' },
+  none: { card: 'bg-surface-card', badge: 'border-border-subtle text-text-muted' },
+};
+
+// M8 due-tint: Lucide icons (calendar, clock, alarm-clock, alert-circle, check-circle-2).
+function DueIcon({ state }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true',
+    focusable: 'false',
+  };
+  if (state === 'overdue') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4" />
+        <path d="M12 16h.01" />
+      </svg>
+    );
+  }
+  if (state === 'warning') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="13" r="8" />
+        <path d="M12 9v4l2 2" />
+        <path d="M5 3 2 6" />
+        <path d="m22 6-3-3" />
+        <path d="M6.38 18.7 4 21" />
+        <path d="M17.64 18.67 20 21" />
+      </svg>
+    );
+  }
+  if (state === 'soon') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" />
+      </svg>
+    );
+  }
+  if (state === 'neutral') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect width="18" height="18" x="3" y="4" rx="2" />
+      <path d="M3 10h18" />
+    </svg>
   );
 }
 
@@ -518,10 +619,10 @@ export default function App() {
     <div className="min-h-screen p-6">
       <header className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-text-primary">
             Vibecoding Project Tracker
           </h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-text-muted">
             {/* Replace this line with your team name from PRD §11. */}
             VibeTrack · From prompt to progress
           </p>
@@ -530,7 +631,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => setEditing(blankTask())}
-          className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          className="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
         >
           <span aria-hidden="true">+ </span>Add task
         </button>
@@ -579,12 +680,16 @@ export default function App() {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-3">
-                  {stageTasks.map((task) => (
+                  {stageTasks.map((task) => {
+                    // M8 due-tint: work out the card's due state once per card
+                    const due = dueState(task);
+                    const dueStyle = DUE_STYLES[due.key];
+                    return (
                     <li key={task.id}>
                       <article
-                        className={`relative rounded-xl border border-l-4 border-border-subtle bg-surface-card p-4 transition-shadow focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 hover:shadow-md ${
+                        className={`relative rounded-xl border border-l-4 border-border-subtle p-4 transition-shadow focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 hover:shadow-md ${
                           (TYPE_STYLES[task.type] || TYPE_STYLES.feature).stripe
-                        }`}
+                        } ${dueStyle.card}`}
                       >
                         {/* M6 tag-style: coloured stripe + icon + text label (never colour alone) */}
                         <p
@@ -620,7 +725,14 @@ export default function App() {
                           </div>
                           <div>
                             <dt className="sr-only">Due date</dt>
-                            <dd>Due {formatDate(task.dueDate)}</dd>
+                            {/* M8 due-tint: colour + icon + words, never colour alone */}
+                            <dd
+                              className={`inline-flex items-center gap-1 rounded-full border bg-surface-card px-2 py-0.5 text-sm font-medium ${dueStyle.badge}`}
+                              title={task.dueDate ? `Due ${formatDate(task.dueDate)}` : undefined}
+                            >
+                              <DueIcon state={due.key} />
+                              {due.label}
+                            </dd>
                           </div>
                         </dl>
 
@@ -647,7 +759,8 @@ export default function App() {
                         </div>
                       </article>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -673,7 +786,7 @@ export default function App() {
         className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4"
       >
         {toast && (
-          <p className="rounded-lg bg-text-primary px-4 py-3 text-sm font-medium text-white shadow-lg">
+          <p className="rounded-lg bg-text-primary px-4 py-3 text-sm font-medium text-surface-card shadow-lg">
             {toast}
           </p>
         )}
