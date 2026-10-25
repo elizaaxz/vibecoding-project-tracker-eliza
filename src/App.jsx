@@ -181,8 +181,11 @@ Done when:
 function buildPrompt(task) {
   const stage = STAGES.find((s) => s.id === task.status);
   const type = task.type === 'bug' ? 'Bug' : 'Feature';
+  const state = dueState(task);
   const due = task.dueDate
-    ? `${formatDate(task.dueDate)} (${dueState(task).label})`
+    ? state.key === 'safe'
+      ? formatDate(task.dueDate)
+      : `${formatDate(task.dueDate)} (${state.label})`
     : 'No due date';
   const lines = [
     `# Task: ${task.title || 'Untitled task'}`,
@@ -712,6 +715,226 @@ function DueIcon({ state }) {
   );
 }
 
+// M11 anchors: the four project deliverables pinned above the board.
+const DEFAULT_ANCHORS = [
+  { id: 'presentation', label: 'Presentation', hint: 'Slides for the pitch', url: '', status: 'not-started' },
+  { id: 'demo', label: 'Demo', hint: 'Live prototype link', url: '', status: 'not-started' },
+  { id: 'report', label: 'Report', hint: 'Written report', url: '', status: 'not-started' },
+  { id: 'documentation', label: 'Documentation', hint: 'README, PRD and DESIGN.md', url: '', status: 'not-started' },
+];
+
+// M11 anchors: progress states, each shown with words and colour (never colour alone).
+const ANCHOR_STATUSES = [
+  { id: 'not-started', label: 'Not started', className: 'bg-due-neutral-soft text-due-neutral-text' },
+  { id: 'in-progress', label: 'In progress', className: 'bg-brand-primary-soft text-brand-primary' },
+  { id: 'done', label: 'Done', className: 'bg-due-safe-soft text-due-safe-text' },
+];
+
+// M11 anchors: adds https:// if missing; returns '' if it isn't a usable web link.
+function normaliseUrl(raw) {
+  const value = raw.trim();
+  if (!value) return '';
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const url = new URL(withScheme);
+    return url.hostname.includes('.') || url.hostname === 'localhost' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+// M11 anchors: one deliverable card with an inline link editor.
+function AnchorCard({ anchor, onChange }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(anchor.url);
+  const [error, setError] = useState('');
+  const inputRef = useRef(null);
+  const editButtonRef = useRef(null);
+  const status = ANCHOR_STATUSES.find((s) => s.id === anchor.status) || ANCHOR_STATUSES[0];
+  const inputId = `anchor-url-${anchor.id}`;
+  const statusId = `anchor-status-${anchor.id}`;
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
+  function startEditing() {
+    setDraft(anchor.url);
+    setError('');
+    setIsEditing(true);
+  }
+
+  function stopEditing() {
+    setIsEditing(false);
+    setError('');
+    // return focus to the button that opened the editor
+    setTimeout(() => editButtonRef.current?.focus(), 0);
+  }
+
+  function save(event) {
+    event.preventDefault();
+    if (!draft.trim()) {
+      onChange({ ...anchor, url: '' });
+      stopEditing();
+      return;
+    }
+    const url = normaliseUrl(draft);
+    if (!url) {
+      setError('Please enter a full web address, e.g. https://example.com');
+      inputRef.current?.focus();
+      return;
+    }
+    onChange({ ...anchor, url });
+    stopEditing();
+  }
+
+  const smallButton =
+    'rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2';
+
+  return (
+    <li className="flex flex-col rounded-xl border border-border-subtle bg-surface-card p-4">
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h3 className="text-base font-semibold text-text-primary">{anchor.label}</h3>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-medium ${status.className}`}>
+          {status.label}
+        </span>
+      </div>
+      <p className="mb-3 text-sm text-text-muted">{anchor.hint}</p>
+
+      {isEditing ? (
+        <form onSubmit={save} noValidate className="mt-auto flex flex-col gap-2">
+          <label htmlFor={inputId} className="text-sm font-medium text-text-primary">
+            {anchor.label} link
+          </label>
+          <input
+            id={inputId}
+            ref={inputRef}
+            type="url"
+            inputMode="url"
+            value={draft}
+            placeholder="https://"
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (error) setError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                stopEditing();
+              }
+            }}
+            aria-invalid={error ? 'true' : 'false'}
+            aria-describedby={error ? `${inputId}-error` : undefined}
+            className="w-full rounded-md border border-border-input bg-surface-card px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+          />
+          {error && (
+            <p id={`${inputId}-error`} role="alert" className="text-sm text-due-overdue-text">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={stopEditing} className={`${smallButton} text-text-primary hover:bg-surface-column`}>
+              Cancel
+            </button>
+            <button type="submit" className={`${smallButton} bg-brand-primary text-surface-card hover:bg-brand-primary-hover`}>
+              Save link
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-auto flex flex-col gap-2">
+          {anchor.url ? (
+            <a
+              href={anchor.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-sm font-medium text-brand-accent underline underline-offset-2 hover:text-brand-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+            >
+              Open {anchor.label.toLowerCase()}
+              <span className="sr-only"> (opens in a new tab)</span>
+              <span aria-hidden="true"> ↗</span>
+            </a>
+          ) : (
+            <p className="text-sm text-text-muted">No link added yet.</p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <label htmlFor={statusId} className="sr-only">
+                {anchor.label} status
+              </label>
+              <select
+                id={statusId}
+                value={anchor.status}
+                onChange={(e) => onChange({ ...anchor, status: e.target.value })}
+                className="rounded-md border border-border-input bg-surface-card px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+              >
+                {ANCHOR_STATUSES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              ref={editButtonRef}
+              onClick={startEditing}
+              aria-label={`${anchor.url ? 'Edit' : 'Add'} ${anchor.label} link`}
+              className={`${smallButton} text-brand-primary hover:bg-brand-primary-soft`}
+            >
+              {anchor.url ? 'Edit link' : 'Add link'}
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// M11 anchors: the Deliverable Anchor Board (collapsible, pinned above the Kanban).
+function AnchorBoard({ anchors, onChange }) {
+  const [open, setOpen] = useState(true);
+  const doneCount = anchors.filter((a) => a.status === 'done').length;
+
+  return (
+    <section
+      aria-labelledby="anchor-board-title"
+      className="mb-6 rounded-xl border border-border-subtle bg-surface-column p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="anchor-board-title" className="text-lg font-semibold text-text-primary">
+          Project deliverables{' '}
+          <span className="text-sm font-medium text-text-muted">
+            ({doneCount} of {anchors.length} done)
+          </span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls="anchor-board-list"
+          className="rounded-md px-2 py-1 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+        >
+          {open ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {open && (
+        <ul id="anchor-board-list" className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {anchors.map((anchor) => (
+            <AnchorCard
+              key={anchor.id}
+              anchor={anchor}
+              onChange={(updated) =>
+                onChange(anchors.map((a) => (a.id === updated.id ? updated : a)))
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export default function App() {
   // TODO M4 data-model:
   //   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', [/* 3-4 seed tasks */]);
@@ -764,6 +987,7 @@ export default function App() {
   //
   // TODO M11 anchors:
   //   const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', [...]);
+  const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', DEFAULT_ANCHORS);
 
   return (
     <div className="min-h-screen p-6">
@@ -788,6 +1012,7 @@ export default function App() {
       </header>
 
       {/* TODO M11 anchors: render the Anchor Board (Presentation / Demo / Report / Documentation) above the board. */}
+      <AnchorBoard anchors={anchors} onChange={setAnchors} />
 
       {/*
         TODO M4 data-model:
