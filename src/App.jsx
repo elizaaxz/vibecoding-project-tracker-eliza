@@ -31,6 +31,7 @@ import { useState, useEffect, useRef } from 'react';
  * @property {string} assignee
  * @property {string|null} dueDate     ISO 'YYYY-MM-DD'
  * @property {string} createdDate      ISO 'YYYY-MM-DD'
+ * @property {string} [context]        M9: curated, paste-ready briefing for an AI tool
  */
 
 // The four columns of the board, in render order.
@@ -158,8 +159,23 @@ function blankTask() {
     assignee: TEAM[0],
     dueDate: null,
     createdDate: todayISO(),
+    context: '',
   };
 }
+
+// M9 context: a starter structure for a good AI briefing.
+const CONTEXT_TEMPLATE = `Goal:
+What this task should achieve.
+
+Relevant files:
+- src/App.jsx
+
+Constraints:
+- Use the colour tokens from tailwind.config.js
+- Keep it keyboard accessible (WCAG 2.2 AA)
+
+Done when:
+- `;
 
 /**
  * M5 crud-modal: one modal for both adding and editing a task.
@@ -167,7 +183,8 @@ function blankTask() {
  * Tab is kept inside the modal, Escape closes, focus returns on close.
  */
 function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
-  const [form, setForm] = useState(task);
+  // M9 context: older saved tasks may not have a context field yet
+  const [form, setForm] = useState({ context: '', ...task });
   const [error, setError] = useState('');
   const dialogRef = useRef(null);
   const titleInputRef = useRef(null);
@@ -212,7 +229,12 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
       titleInputRef.current?.focus();
       return;
     }
-    onSave({ ...form, title: form.title.trim(), dueDate: form.dueDate || null });
+    onSave({
+      ...form,
+      title: form.title.trim(),
+      dueDate: form.dueDate || null,
+      context: form.context.trim(),
+    });
   }
 
   function handleDelete() {
@@ -346,6 +368,36 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
                 className={fieldClass}
               />
             </div>
+          </div>
+
+          {/* M9 context: curated, paste-ready briefing for an AI tool */}
+          <div>
+            <div className="mb-1 flex items-end justify-between gap-2">
+              <label htmlFor="task-context" className="block text-sm font-medium text-text-primary">
+                Prompt context
+              </label>
+              {!form.context.trim() && (
+                <button
+                  type="button"
+                  onClick={() => update('context', CONTEXT_TEMPLATE)}
+                  className="rounded-md px-2 py-1 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+                >
+                  Use template
+                </button>
+              )}
+            </div>
+            <p id="task-context-help" className="mb-2 text-sm text-text-muted">
+              Paste the prompt and key context that produced this task, so anyone can pick it up in an AI tool.
+            </p>
+            <textarea
+              id="task-context"
+              rows={7}
+              value={form.context}
+              onChange={(e) => update('context', e.target.value)}
+              aria-describedby="task-context-help"
+              spellCheck={false}
+              className={`${fieldClass} font-mono text-sm leading-relaxed`}
+            />
           </div>
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -713,6 +765,30 @@ export default function App() {
                         {task.description && (
                           <p className="mt-1 break-words text-sm text-text-muted">
                             {task.description}
+                          </p>
+                        )}
+                        {/* M9 context: shows which tasks already have a briefing */}
+                        {task.context && task.context.trim() && (
+                          <p className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-primary">
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                              focusable="false"
+                            >
+                              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                              <path d="M10 9H8" />
+                              <path d="M16 13H8" />
+                              <path d="M16 17H8" />
+                            </svg>
+                            Prompt context added
                           </p>
                         )}
                         <dl className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-muted">
