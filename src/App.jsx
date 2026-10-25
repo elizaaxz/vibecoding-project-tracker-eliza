@@ -439,6 +439,38 @@ const TYPE_STYLES = {
   },
 };
 
+// M7 task-owner: one avatar colour per team member (all pass WCAG AA contrast).
+const OWNER_STYLES = [
+  'bg-brand-primary-soft text-brand-primary',
+  'bg-[#CCFBF1] text-[#115E59]',
+  'bg-slate-200 text-slate-700',
+];
+
+// M7 task-owner: initials for the avatar, e.g. "Full-Stack Developer" -> "FD".
+function initials(name) {
+  const words = name.split(/[\s/&-]+/).filter((w) => /^[A-Za-z]/.test(w));
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+// M7 task-owner: assignee badge shown on each card.
+function OwnerBadge({ name }) {
+  const index = TEAM.indexOf(name);
+  const colour = OWNER_STYLES[(index >= 0 ? index : 0) % OWNER_STYLES.length];
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span
+        aria-hidden="true"
+        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${colour}`}
+      >
+        {initials(name)}
+      </span>
+      <span className="truncate text-sm text-text-primary">{name}</span>
+    </span>
+  );
+}
+
 export default function App() {
   // TODO M4 data-model:
   //   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', [/* 3-4 seed tasks */]);
@@ -464,6 +496,19 @@ export default function App() {
   function deleteTask(id) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     setEditing(null);
+  }
+
+  // M7 task-owner: "Hand off to..." changes the assignee and shows a toast.
+  const [toast, setToast] = useState('');
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(''), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  function handOff(id, name) {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, assignee: name } : t)));
+    setToast(`Task handed off to ${name}.`);
   }
   //
   // TODO M11 anchors:
@@ -566,15 +611,40 @@ export default function App() {
                           </p>
                         )}
                         <dl className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-muted">
-                          <div>
+                          <div className="min-w-0">
                             <dt className="sr-only">Assignee</dt>
-                            <dd>{task.assignee}</dd>
+                            {/* M7 task-owner: assignee badge */}
+                            <dd>
+                              <OwnerBadge name={task.assignee} />
+                            </dd>
                           </div>
                           <div>
                             <dt className="sr-only">Due date</dt>
                             <dd>Due {formatDate(task.dueDate)}</dd>
                           </div>
                         </dl>
+
+                        {/* M7 task-owner: "Hand off to..." dropdown (sits above the card's click area) */}
+                        <div className="relative z-10 mt-3 flex items-center gap-2 border-t border-border-subtle pt-3">
+                          <label
+                            htmlFor={`handoff-${task.id}`}
+                            className="shrink-0 text-sm text-text-muted"
+                          >
+                            Hand off to
+                          </label>
+                          <select
+                            id={`handoff-${task.id}`}
+                            value={task.assignee}
+                            onChange={(e) => handOff(task.id, e.target.value)}
+                            className="min-w-0 flex-1 rounded-md border border-border-input bg-surface-card px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+                          >
+                            {TEAM.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </article>
                     </li>
                   ))}
@@ -595,6 +665,19 @@ export default function App() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {/* M7 task-owner: handoff toast, announced to screen readers */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4"
+      >
+        {toast && (
+          <p className="rounded-lg bg-text-primary px-4 py-3 text-sm font-medium text-white shadow-lg">
+            {toast}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
