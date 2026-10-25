@@ -177,12 +177,91 @@ Constraints:
 Done when:
 - `;
 
+// M10 copy-prompt: turns a task + its context into one paste-ready prompt (Markdown).
+function buildPrompt(task) {
+  const stage = STAGES.find((s) => s.id === task.status);
+  const type = task.type === 'bug' ? 'Bug' : 'Feature';
+  const due = task.dueDate
+    ? `${formatDate(task.dueDate)} (${dueState(task).label})`
+    : 'No due date';
+  const lines = [
+    `# Task: ${task.title || 'Untitled task'}`,
+    '',
+    'Project: VibeTrack (Vibecoding Project Tracker)',
+    `Type: ${type}`,
+    `Status: ${stage ? stage.label : task.status}`,
+    `Assignee: ${task.assignee}`,
+    `Due: ${due}`,
+    '',
+    '## Description',
+    task.description && task.description.trim() ? task.description.trim() : 'No description provided.',
+    '',
+    '## Context',
+    task.context && task.context.trim() ? task.context.trim() : 'No prompt context added yet.',
+  ];
+  return lines.join('\n');
+}
+
+// M10 copy-prompt: copies text to the clipboard, with a fallback for older browsers.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the fallback below */
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+// M10 copy-prompt: Lucide "clipboard-copy" icon.
+function CopyIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v4" />
+      <path d="M21 14H11" />
+      <path d="m15 10-4 4 4 4" />
+    </svg>
+  );
+}
+
+// M10 copy-prompt: shared button style (secondary, brand-coloured).
+const COPY_BUTTON_CLASS =
+  'inline-flex items-center justify-center gap-2 rounded-md border border-brand-primary bg-surface-card px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2';
+
 /**
  * M5 crud-modal: one modal for both adding and editing a task.
  * Accessible: role="dialog", labelled title, focus moves in on open,
  * Tab is kept inside the modal, Escape closes, focus returns on close.
  */
-function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
+function TaskModal({ task, isNew, onSave, onDelete, onClose, onCopy }) {
   // M9 context: older saved tasks may not have a context field yet
   const [form, setForm] = useState({ context: '', ...task });
   const [error, setError] = useState('');
@@ -398,6 +477,15 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
               spellCheck={false}
               className={`${fieldClass} font-mono text-sm leading-relaxed`}
             />
+            {/* M10 copy-prompt: copies what is in the form right now, saved or not */}
+            <button
+              type="button"
+              onClick={() => onCopy(form)}
+              className={`mt-2 w-full ${COPY_BUTTON_CLASS}`}
+            >
+              <CopyIcon />
+              Copy as Prompt Context
+            </button>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -663,6 +751,16 @@ export default function App() {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, assignee: name } : t)));
     setToast(`Task handed off to ${name}.`);
   }
+
+  // M10 copy-prompt: copy the formatted prompt and confirm with the toast.
+  async function copyPrompt(task) {
+    const ok = await copyToClipboard(buildPrompt(task));
+    setToast(
+      ok
+        ? 'Prompt context copied. Ready to paste into your AI tool.'
+        : "Couldn't copy automatically. Open the task and copy the context by hand."
+    );
+  }
   //
   // TODO M11 anchors:
   //   const [anchors, setAnchors] = useLocalStorage('vibetracker.anchors', [...]);
@@ -833,6 +931,17 @@ export default function App() {
                             ))}
                           </select>
                         </div>
+
+                        {/* M10 copy-prompt: one-click copy (sits above the card's click area) */}
+                        <button
+                          type="button"
+                          onClick={() => copyPrompt(task)}
+                          aria-label={`Copy as Prompt Context: ${task.title}`}
+                          className={`relative z-10 mt-2 w-full ${COPY_BUTTON_CLASS}`}
+                        >
+                          <CopyIcon />
+                          Copy as Prompt Context
+                        </button>
                       </article>
                     </li>
                     );
@@ -852,10 +961,11 @@ export default function App() {
           onSave={saveTask}
           onDelete={deleteTask}
           onClose={() => setEditing(null)}
+          onCopy={copyPrompt}
         />
       )}
 
-      {/* M7 task-owner: handoff toast, announced to screen readers */}
+      {/* M7 task-owner + M10 copy-prompt: toast, announced to screen readers */}
       <div
         role="status"
         aria-live="polite"
