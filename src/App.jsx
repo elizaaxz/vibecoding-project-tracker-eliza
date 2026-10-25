@@ -100,14 +100,14 @@ const SEED_TASKS = [
   },
   // REVIEW
   {
-    id: 'task-3',
-    title: 'Review colour contrast',
-    description: 'Check text, buttons and status indicators against WCAG 2.2 AA contrast requirements.',
-    type: 'feature',
+   id: 'task-3',
+    title: 'Fix task cards overflowing on mobile',
+    description: 'Long task titles cause cards to extend beyond the Kanban column on smaller screens.',
+    type: 'bug',
     status: 'review',
-    assignee: TEAM[2],
-    dueDate: '2026-10-27',
-    createdDate: '2026-10-24',
+    assignee: TEAM[0],
+    dueDate: '2026-10-26',
+    createdDate: '2026-10-23',
   },
   // DONE
   {
@@ -382,6 +382,63 @@ function TaskModal({ task, isNew, onSave, onDelete, onClose }) {
   );
 }
 
+// M6 tag-style: Lucide "sparkles" (feature) and "bug" icons as inline SVG,
+// so no extra package is needed. aria-hidden because the text label says the same thing.
+function TypeIcon({ type }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true',
+    focusable: 'false',
+  };
+  if (type === 'bug') {
+    return (
+      <svg {...common}>
+        <path d="m8 2 1.88 1.88" />
+        <path d="M14.12 3.88 16 2" />
+        <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+        <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+        <path d="M12 20v-9" />
+        <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+        <path d="M6 13H2" />
+        <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+        <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+        <path d="M22 13h-4" />
+        <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+      <path d="M20 3v4" />
+      <path d="M22 5h-4" />
+      <path d="M4 17v2" />
+      <path d="M5 18H3" />
+    </svg>
+  );
+}
+
+// M6 tag-style: full class names written out so Tailwind keeps them in the build.
+const TYPE_STYLES = {
+  feature: {
+    label: 'Feature',
+    stripe: 'border-l-type-feature',
+    pill: 'bg-type-feature-soft text-type-feature-text',
+  },
+  bug: {
+    label: 'Bug',
+    stripe: 'border-l-type-bug',
+    pill: 'bg-type-bug-soft text-type-bug-text',
+  },
+};
+
 export default function App() {
   // TODO M4 data-model:
   //   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', [/* 3-4 seed tasks */]);
@@ -479,9 +536,19 @@ export default function App() {
                 <ul className="flex flex-col gap-3">
                   {stageTasks.map((task) => (
                     <li key={task.id}>
-                      <article className="relative rounded-xl border border-border-subtle bg-surface-card p-4 transition-shadow focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 hover:shadow-md">
-                        <p className="mb-1 text-sm font-medium text-text-muted">
-                          {task.type === 'bug' ? 'Bug' : 'Feature'}
+                      <article
+                        className={`relative rounded-xl border border-l-4 border-border-subtle bg-surface-card p-4 transition-shadow focus-within:ring-2 focus-within:ring-brand-primary focus-within:ring-offset-2 hover:shadow-md ${
+                          (TYPE_STYLES[task.type] || TYPE_STYLES.feature).stripe
+                        }`}
+                      >
+                        {/* M6 tag-style: coloured stripe + icon + text label (never colour alone) */}
+                        <p
+                          className={`mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm font-medium ${
+                            (TYPE_STYLES[task.type] || TYPE_STYLES.feature).pill
+                          }`}
+                        >
+                          <TypeIcon type={task.type} />
+                          {(TYPE_STYLES[task.type] || TYPE_STYLES.feature).label}
                         </p>
                         <h3 className="break-words text-base font-medium text-text-primary">
                           {/* M5 crud-modal: clicking anywhere on the card opens it in edit mode */}
