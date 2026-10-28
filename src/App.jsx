@@ -24,6 +24,10 @@ import './themes.css';
  *                         plus adjustable text size and a Focus mode for cognitive
  *                         accessibility (e.g. ADHD), all in a Settings dialog.
  *
+ * Login (prototype requirement): a front-end-only sign-in screen. There is no backend —
+ * any valid email + 8-character password (or the demo account) signs in, and only the
+ * name and email are kept on this device. Passwords are never stored.
+ *
  * Search the file for `TODO M<n>` to find the right hook for each milestone.
  */
 
@@ -1427,6 +1431,288 @@ function SettingsModal({
   );
 }
 
+// Login: where the signed-in user is kept. "Remember me" uses localStorage (stays signed in);
+// otherwise sessionStorage (signed out when the tab closes). Passwords are never saved.
+const SESSION_KEY = 'vibetracker.session';
+
+function loadSession() {
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY) ?? window.sessionStorage.getItem(SESSION_KEY);
+    const session = raw ? JSON.parse(raw) : null;
+    return session && typeof session.email === 'string' ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session, remember) {
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+    window.sessionStorage.removeItem(SESSION_KEY);
+    (remember ? window.localStorage : window.sessionStorage).setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* storage blocked (e.g. private mode) — the user stays signed in until they reload */
+  }
+}
+
+function clearSession() {
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+    window.sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+// Login: "marcus.maniago@uni.ac.uk" -> "Marcus Maniago".
+function nameFromEmail(email) {
+  const local = email.split('@')[0] || 'User';
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+const DEMO_ACCOUNT = { email: 'demo@vibetrack.app', name: 'Demo User' };
+const MIN_PASSWORD_LENGTH = 8;
+
+// Login: Lucide "layout-grid" icon for the VibeTrack wordmark (DESIGN.md §6).
+function LogoMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-brand-primary text-surface-card"
+    >
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        focusable="false"
+      >
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="14" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * Login: front-end-only sign-in screen (no backend, as the brief allows).
+ * Accessible: visible labels, errors in text linked to each field, focus moves to
+ * the first problem, show/hide password, browser autofill, and a status message
+ * while "signing in". The demo account means an assessor never needs to register.
+ */
+function LoginPage({ onSignIn, notice }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    emailRef.current?.focus();
+    return () => clearTimeout(timerRef.current);
+  }, []);
+
+  // A short pause so it feels like a real sign-in, then enter the app.
+  function finish(session) {
+    setSubmitting(true);
+    timerRef.current = setTimeout(() => onSignIn(session, remember), 700);
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (submitting) return;
+    const trimmed = email.trim();
+    const next = {};
+    if (!trimmed) next.email = 'Enter your email address.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      next.email = 'Enter an email address in the format name@example.com.';
+    }
+    if (!password) next.password = 'Enter your password.';
+    else if (password.length < MIN_PASSWORD_LENGTH) {
+      next.password = `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    setErrors(next);
+    if (next.email) {
+      emailRef.current?.focus();
+      return;
+    }
+    if (next.password) {
+      passwordRef.current?.focus();
+      return;
+    }
+    finish({ email: trimmed, name: nameFromEmail(trimmed), signedInAt: new Date().toISOString() });
+  }
+
+  function signInWithDemo() {
+    if (submitting) return;
+    setErrors({});
+    finish({ ...DEMO_ACCOUNT, signedInAt: new Date().toISOString() });
+  }
+
+  const labelClass = 'mb-1 block text-sm font-medium text-text-primary';
+  const fieldClass =
+    'w-full rounded-md border bg-surface-card px-3 py-2 text-base text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2';
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface-page p-6 text-text-primary">
+      <main className="w-full max-w-md">
+        <div className="mb-6 flex items-center gap-3">
+          <LogoMark />
+          <div>
+            <p className="text-xl font-semibold text-text-primary">VibeTrack</p>
+            <p className="text-sm text-text-muted">From prompt to progress</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border-subtle bg-surface-card p-6 shadow-sm">
+          <h1 className="mb-1 text-2xl font-semibold text-text-primary">Sign in</h1>
+          <p className="mb-5 text-sm text-text-muted">Track your vibecoding tasks and the prompts behind them.</p>
+
+          {notice && (
+            <p role="status" className="mb-4 rounded-md border border-border-subtle bg-surface-column px-3 py-2 text-sm text-text-primary">
+              {notice}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4" aria-busy={submitting}>
+            <div>
+              <label htmlFor="login-email" className={labelClass}>
+                Email address
+              </label>
+              <input
+                id="login-email"
+                ref={emailRef}
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                aria-invalid={errors.email ? 'true' : 'false'}
+                aria-describedby={errors.email ? 'login-email-error' : undefined}
+                disabled={submitting}
+                className={`${fieldClass} ${errors.email ? 'border-due-overdue' : 'border-border-input'}`}
+              />
+              {errors.email && (
+                <p id="login-email-error" className="mt-1 text-sm text-due-overdue-text">
+                  <span className="sr-only">Error: </span>
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="login-password" className={labelClass}>
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="login-password"
+                  ref={passwordRef}
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
+                  aria-invalid={errors.password ? 'true' : 'false'}
+                  aria-describedby={`login-password-hint${errors.password ? ' login-password-error' : ''}`}
+                  disabled={submitting}
+                  className={`${fieldClass} pr-20 ${errors.password ? 'border-due-overdue' : 'border-border-input'}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  aria-controls="login-password"
+                  disabled={submitting}
+                  className="absolute inset-y-0 right-1 my-1 rounded-md px-3 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                  <span className="sr-only"> password</span>
+                </button>
+              </div>
+              <p id="login-password-hint" className="mt-1 text-sm text-text-muted">
+                At least {MIN_PASSWORD_LENGTH} characters.
+              </p>
+              {errors.password && (
+                <p id="login-password-error" className="mt-1 text-sm text-due-overdue-text">
+                  <span className="sr-only">Error: </span>
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            <label htmlFor="login-remember" className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+              <input
+                id="login-remember"
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                disabled={submitting}
+                className="h-4 w-4 accent-brand-primary"
+              />
+              Keep me signed in on this device
+            </label>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-md bg-brand-primary px-4 py-2 text-base font-medium text-surface-card hover:bg-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-80"
+            >
+              {submitting ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+
+          <div className="my-4 flex items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-border-subtle" />
+            <span className="text-sm text-text-muted">or</span>
+            <span className="h-px flex-1 bg-border-subtle" />
+          </div>
+
+          <button
+            type="button"
+            onClick={signInWithDemo}
+            disabled={submitting}
+            className="w-full rounded-md border border-border-input bg-surface-card px-4 py-2 text-base font-medium text-text-primary hover:bg-surface-column focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:cursor-wait"
+          >
+            Continue with demo account
+          </button>
+
+          {/* Announces progress to screen readers while "signing in" */}
+          <p role="status" aria-live="polite" className="sr-only">
+            {submitting ? 'Signing in, please wait.' : ''}
+          </p>
+        </div>
+
+        <p className="mt-4 rounded-md border border-border-subtle bg-brand-primary-soft px-3 py-2 text-sm text-text-primary">
+          <strong className="font-semibold">Prototype sign-in.</strong> There is no real account system yet: use any
+          email with a password of {MIN_PASSWORD_LENGTH}+ characters, or the demo account. Your password is never saved.
+        </p>
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
   // TODO M4 data-model:
   //   const [tasks, setTasks] = useLocalStorage('vibetracker.tasks', [/* 3-4 seed tasks */]);
@@ -1522,13 +1808,48 @@ export default function App() {
     setToast('Settings reset to defaults.');
   }
 
+  // Login: who is signed in (null = show the sign-in screen).
+  const [session, setSession] = useState(() => loadSession());
+  const [signedOutNotice, setSignedOutNotice] = useState('');
+  const headingRef = useRef(null);
+  const justSignedIn = useRef(false);
+
+  function signIn(newSession, remember) {
+    saveSession(newSession, remember);
+    justSignedIn.current = true;
+    setSignedOutNotice('');
+    setSession(newSession);
+    setToast(`Welcome, ${newSession.name}.`);
+  }
+
+  function signOut() {
+    clearSession();
+    setEditing(null);
+    setSettingsOpen(false);
+    setSession(null);
+    setSignedOutNotice("You've been signed out.");
+  }
+
+  // Login: page title for each screen (WCAG 2.4.2), and focus the main heading after sign-in.
+  useEffect(() => {
+    document.title = session ? 'VibeTrack · Board' : 'Sign in · VibeTrack';
+    if (session && justSignedIn.current) {
+      justSignedIn.current = false;
+      headingRef.current?.focus();
+    }
+  }, [session]);
+
+  if (!session) {
+    return <LoginPage onSignIn={signIn} notice={signedOutNotice} />;
+  }
+
   // M12 secret-sauce: the page background and text follow the selected theme
   // (index.css hard-codes the body colours, so they are set here instead).
   return (
     <div className="min-h-screen bg-surface-page p-6 text-text-primary">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-text-primary focus:outline-none">
             Vibecoding Project Tracker
           </h1>
           <p className="text-sm text-text-muted">
@@ -1537,6 +1858,17 @@ export default function App() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Login: who is signed in, with a way to sign out */}
+          <p className="text-sm text-text-muted">
+            Signed in as <span className="font-medium text-text-primary">{session.name}</span>
+          </p>
+          <button
+            type="button"
+            onClick={signOut}
+            className="rounded-md px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+          >
+            Sign out
+          </button>
           {/* M12 secret-sauce: Settings (text size + colour theme) */}
           <button
             type="button"
