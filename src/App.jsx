@@ -22,7 +22,8 @@ import './themes.css';
  *                         VibeTrack: user-selectable colour themes, including
  *                         colour-vision-friendly palettes and dark mode (see src/themes.css),
  *                         plus adjustable text size and a Focus mode for cognitive
- *                         accessibility (e.g. ADHD), all in a Settings dialog.
+ *                         accessibility (e.g. ADHD), all in a Settings dialog,
+ *                         including a "Show only my tasks" filter.
  *
  * Login (prototype requirement): a front-end-only sign-in screen. There is no backend —
  * any valid email + 8-character password (or the demo account) signs in, and only the
@@ -1281,6 +1282,10 @@ function SettingsModal({
   onFocusModeChange,
   hideDetails,
   onHideDetailsChange,
+  myTasksOnly,
+  onMyTasksOnlyChange,
+  myRole,
+  onMyRoleChange,
   onReset,
   onClose,
 }) {
@@ -1372,6 +1377,35 @@ function SettingsModal({
               title="Hide extra card details"
               description="Cards show only the type, title, owner and due date. Open a task to see everything else, including hand-off and copy."
             />
+            {/* M12 secret-sauce: "Show only my tasks" — the board shows only tasks assigned to your role */}
+            <ToggleRow
+              id="setting-my-tasks"
+              checked={myTasksOnly}
+              onChange={onMyTasksOnlyChange}
+              title="Show only my tasks"
+              description="Hide tasks assigned to other team members, so you can focus on your own work. A banner above the board shows when this is on."
+            />
+            <div className="rounded-lg border border-border-input bg-surface-card p-3">
+              <label htmlFor="setting-my-role" className="mb-1 block font-medium text-text-primary">
+                Your team role
+              </label>
+              <p id="setting-my-role-help" className="mb-2 text-sm text-text-muted">
+                Used by "Show only my tasks" to find the tasks assigned to you.
+              </p>
+              <select
+                id="setting-my-role"
+                value={myRole}
+                onChange={(e) => onMyRoleChange(e.target.value)}
+                aria-describedby="setting-my-role-help"
+                className="w-full rounded-md border border-border-input bg-surface-card px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+              >
+                {TEAM.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </fieldset>
 
@@ -1800,11 +1834,19 @@ export default function App() {
   const currentFocusStage = STAGES.some((s) => s.id === focusStage) ? focusStage : STAGES[0].id;
   const visibleStages = focusMode ? STAGES.filter((s) => s.id === currentFocusStage) : STAGES;
 
+  // M12 secret-sauce: "Show only my tasks" — filter the board to the user's own team role.
+  const [myTasksOnly, setMyTasksOnly] = useLocalStorage('vibetracker.myTasksOnly', false);
+  const [myRole, setMyRole] = useLocalStorage('vibetracker.myRole', TEAM[0]);
+  const currentRole = TEAM.includes(myRole) ? myRole : TEAM[0];
+  const boardTasks = myTasksOnly ? tasks.filter((t) => t.assignee === currentRole) : tasks;
+  const hiddenCount = tasks.length - boardTasks.length;
+
   function resetSettings() {
     setTheme('default');
     setTextSize('default');
     setFocusMode(false);
     setHideDetails(false);
+    setMyTasksOnly(false);
     setToast('Settings reset to defaults.');
   }
 
@@ -1904,9 +1946,33 @@ export default function App() {
           Clicking a card should open the same modal in edit mode.
       */}
       <main aria-label="Task board">
+        {/* M12 secret-sauce: always say when tasks are hidden, with a one-click way back */}
+        {myTasksOnly && (
+          <div
+            role="status"
+            className="mx-auto mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-primary bg-brand-primary-soft px-4 py-3"
+          >
+            <p className="text-sm text-text-primary">
+              Showing only tasks assigned to <strong className="font-semibold">{currentRole}</strong>
+              {hiddenCount > 0 && (
+                <span className="text-text-muted">
+                  {' '}
+                  · {hiddenCount} other {hiddenCount === 1 ? 'task' : 'tasks'} hidden
+                </span>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => setMyTasksOnly(false)}
+              className="rounded-md border border-brand-primary bg-surface-card px-3 py-1 text-sm font-medium text-brand-primary hover:bg-brand-primary-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
+            >
+              Show all tasks
+            </button>
+          </div>
+        )}
         {/* M12 secret-sauce: in Focus mode, tabs pick the one stage that is shown */}
         {focusMode && (
-          <FocusStageTabs tasks={tasks} stage={currentFocusStage} onChange={setFocusStage} />
+          <FocusStageTabs tasks={boardTasks} stage={currentFocusStage} onChange={setFocusStage} />
         )}
         <div
           {...(focusMode
@@ -1915,7 +1981,7 @@ export default function App() {
           className={focusMode ? 'mx-auto max-w-2xl' : `grid grid-cols-1 gap-4 ${gridColumns}`}
         >
         {visibleStages.map((stage) => {
-          const stageTasks = tasks.filter((task) => task.status === stage.id);
+          const stageTasks = boardTasks.filter((task) => task.status === stage.id);
           const headingId = `column-${stage.id}`;
 
           return (
@@ -1937,7 +2003,7 @@ export default function App() {
 
               {stageTasks.length === 0 ? (
                 <p className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-border-subtle p-4 text-sm text-text-muted">
-                  No tasks here yet.
+                  {myTasksOnly ? 'None of your tasks here.' : 'No tasks here yet.'}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-3">
@@ -2095,6 +2161,10 @@ export default function App() {
           onFocusModeChange={setFocusMode}
           hideDetails={hideDetails}
           onHideDetailsChange={setHideDetails}
+          myTasksOnly={myTasksOnly}
+          onMyTasksOnlyChange={setMyTasksOnly}
+          myRole={currentRole}
+          onMyRoleChange={setMyRole}
           onReset={resetSettings}
           onClose={() => setSettingsOpen(false)}
         />
